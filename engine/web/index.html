@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marswalk Mission</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{
+  --hud:#7cf7d4; --hud-dim:#3fa58a; --warn:#ffb020; --danger:#ff4d4d; --ok:#4ade80;
+  --panel:rgba(6,14,18,.72); --line:rgba(124,247,212,.35); --text:#e6fff8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0b0606;color:var(--text);font-family:"Share Tech Mono",monospace;overflow:hidden}
+#map{position:absolute;inset:0;background:#2a140c}
+.visor{position:absolute;inset:0;pointer-events:none;z-index:500;
+  background:radial-gradient(ellipse 75% 70% at 50% 50%,transparent 62%,rgba(0,0,0,.55) 82%,rgba(0,0,0,.9) 100%)}
+.panel{position:absolute;z-index:600;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:12px 14px;backdrop-filter:blur(4px);box-shadow:0 0 18px rgba(124,247,212,.12)}
+.title{font-family:Orbitron,sans-serif;font-size:11px;letter-spacing:.18em;color:var(--hud-dim);margin-bottom:8px}
+#vitals{top:14px;left:14px;width:230px}
+#nav{top:14px;right:14px;width:250px}
+#score{top:14px;left:50%;transform:translateX(-50%);display:flex;gap:18px;align-items:center;padding:8px 18px}
+#controls{bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 28px)}
+#layers{bottom:14px;left:14px;width:200px}
+.row{display:flex;justify-content:space-between;align-items:center;margin:5px 0;font-size:14px}
+.val{color:var(--hud);font-size:16px}
+.bar{height:8px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;margin:3px 0 8px}
+.bar>i{display:block;height:100%;background:var(--hud);transition:width .3s}
+.big{font-family:Orbitron,sans-serif;font-size:22px;color:var(--hud)}
+.lbl{font-size:11px;color:var(--hud-dim);letter-spacing:.1em}
+button{font-family:inherit;font-size:14px;color:var(--text);background:rgba(124,247,212,.08);border:1px solid var(--line);
+  border-radius:10px;padding:8px 14px;cursor:pointer}
+button:hover{background:rgba(124,247,212,.18)}
+button.primary{background:var(--hud);color:#03231b;border-color:var(--hud);font-weight:bold}
+button.danger{border-color:var(--danger);color:#ffd6d6}
+button.active{background:var(--warn);color:#2b1800;border-color:var(--warn)}
+#arrow{width:54px;height:54px;transition:transform .3s}
+#banner{position:absolute;top:84px;left:50%;transform:translateX(-50%);z-index:650;padding:10px 18px;border-radius:12px;
+  font-size:15px;display:none;max-width:min(560px,90vw);text-align:center;border:1px solid}
+#banner.warn{display:block;background:rgba(60,35,0,.85);border-color:var(--warn);color:#ffe2a8}
+#banner.danger{display:block;background:rgba(70,0,0,.85);border-color:var(--danger);color:#ffd0d0}
+#banner.ok{display:block;background:rgba(0,50,30,.85);border-color:var(--ok);color:#c9ffe0}
+.modal{position:absolute;inset:0;z-index:900;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55)}
+.modal.show{display:flex}
+.card{width:min(560px,92vw);max-height:88vh;overflow:auto;background:#081216;border:1px solid var(--line);border-radius:18px;padding:22px 24px;
+  box-shadow:0 0 40px rgba(124,247,212,.15)}
+.card h2{font-family:Orbitron,sans-serif;color:var(--hud);margin:0 0 10px;font-size:20px}
+.card p,.card li{line-height:1.55;font-size:14.5px;color:#cfe9e2}
+.card .btns{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+.stat{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+.stat div{background:rgba(124,247,212,.06);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-family:Orbitron,sans-serif;color:var(--hud);font-size:18px}
+label.tg{display:flex;gap:8px;align-items:center;font-size:13px;margin:5px 0;cursor:pointer}
+.leaflet-container{background:#2a140c}
+.astro{font-size:26px;filter:drop-shadow(0 0 6px #7cf7d4)}
+.tgt{background:#38bdf8;color:#03141f;border:2px solid #fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-family:Orbitron}
+.tgt.done{background:#4ade80}
+.hab{font-size:24px}
+.small{font-size:12px;color:var(--hud-dim)}
+@media (max-width:760px){
+  #vitals{width:170px;font-size:12px}#nav{width:170px}#layers{display:none}
+  #score{top:auto;bottom:70px}.big{font-size:17px}
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="visor"></div>
+
+<div id="vitals" class="panel">
+  <div class="title">SUIT VITALS</div>
+  <div class="row"><span>O₂</span><span class="val" id="o2t">100%</span></div>
+  <div class="bar"><i id="o2b" style="width:100%"></i></div>
+  <div class="row"><span>POWER</span><span class="val" id="pwt">100%</span></div>
+  <div class="bar"><i id="pwb" style="width:100%"></i></div>
+  <div class="row"><span>EVA TIME</span><span class="val" id="time">00:00</span></div>
+  <div class="row"><span>WALKED</span><span class="val" id="walked">0.00 km</span></div>
+  <div class="row"><span>EARTH LINK</span><span class="val" style="color:var(--warn)">≈12 min delay</span></div>
+</div>
+
+<div id="score" class="panel">
+  <div><div class="lbl">SCIENCE</div><div class="big" id="sci">0</div></div>
+  <div><div class="lbl">SAFETY</div><div class="big" id="saf">1000</div></div>
+  <div><div class="lbl">REROUTES</div><div class="big" id="rr">0</div></div>
+</div>
+
+<div id="nav" class="panel">
+  <div class="title">NAVIGATION</div>
+  <div class="row"><span>NEXT</span><span class="val" id="next">—</span></div>
+  <div style="display:flex;align-items:center;gap:12px;margin:6px 0">
+    <svg id="arrow" viewBox="0 0 54 54"><circle cx="27" cy="27" r="25" fill="none" stroke="#3fa58a"/>
+      <path d="M27 6 L38 34 L27 28 L16 34 Z" fill="#7cf7d4"/></svg>
+    <div><div class="big" id="dist">—</div><div class="lbl">TO TARGET</div></div>
+  </div>
+  <div class="row"><span>ELEVATION</span><span class="val" id="elev">—</span></div>
+  <div class="row"><span>SLOPE</span><span class="val" id="slope">—</span></div>
+  <div class="bar"><i id="slb" style="width:0%"></i></div>
+  <div class="row"><span>TERRAIN</span><span class="val" id="terr">—</span></div>
+</div>
+
+<div id="banner"></div>
+
+<div id="layers" class="panel">
+  <div class="title">MAP LAYERS</div>
+  <label class="tg"><input type="radio" name="ov" value="none" checked> Imagery only</label>
+  <label class="tg"><input type="radio" name="ov" value="slope"> Slope</label>
+  <label class="tg"><input type="radio" name="ov" value="roughness"> Roughness</label>
+  <label class="tg"><input type="radio" name="ov" value="cost"> Walk cost / no-go</label>
+  <label class="tg" id="curRow" style="display:none"><input type="checkbox" id="curTg" checked> Curiosity real traverse</label>
+  <input id="opac" type="range" min="0.1" max="1" step="0.05" value="0.6" style="width:100%">
+  <div class="small">NASA Mars Trek CTX + MRO CTX DTM</div>
+</div>
+
+<div id="controls" class="panel">
+  <button id="play" class="primary">▶ Start walk</button>
+  <button data-speed="1">x1</button><button data-speed="3" class="active">x3</button><button data-speed="10">x10</button>
+  <button id="report" class="danger">⚠ Report hazard</button>
+  <button id="center">◎ Follow</button>
+</div>
+
+<!-- Intro -->
+<div id="m-intro" class="modal show"><div class="card">
+  <h2>MARSWALK MISSION</h2>
+  <p>You are an astronaut at the habitat in <b>Gale Crater</b>, at the foot of <b>Mount Sharp</b> on Mars.
+     Reach every science stop, complete its task, and walk back to the habitat — safely.</p>
+  <ul>
+    <li>Your route is planned from a real <b>NASA terrain model</b> (MRO CTX DTM, 20 m/pixel): steep and rough ground is avoided.</li>
+    <li>Orbital data can't see every boulder. If your suit detects a hazard, <b>report it</b> — a new safe route is computed on the spot.
+        Earth is ~12 minutes away by radio, so you can't wait for help.</li>
+    <li>Watch your <b>O₂</b> and <b>power</b>: steep ground costs more energy.</li>
+    <li>Every hazard you report is saved to the map, so the next crew walks a safer route.</li>
+  </ul>
+  <p class="small" id="apistatus">Connecting to the route engine…</p>
+  <div class="btns"><button id="go" class="primary" disabled>Start mission</button></div>
+</div></div>
+
+<!-- Event -->
+<div id="m-event" class="modal"><div class="card">
+  <h2 style="color:var(--warn)">⚠ HAZARD DETECTED</h2>
+  <p id="evtext">Your helmet LIDAR detects a <b>boulder field</b> ahead that is too small to appear in the 20 m orbital terrain model.</p>
+  <p>Earth mission control is ~12 minutes away. The decision is yours.</p>
+  <div class="btns">
+    <button id="ev-reroute" class="primary">Report & re-route</button>
+    <button id="ev-push" class="danger">Push through</button>
+  </div>
+</div></div>
+
+<!-- Target -->
+<div id="m-target" class="modal"><div class="card">
+  <h2 id="tg-title">SCIENCE STOP</h2>
+  <p id="tg-task"></p>
+  <div class="stat" id="tg-stats"></div>
+  <p class="small" id="tg-fact"></p>
+  <div class="btns"><button id="tg-collect" class="primary">Complete task (+500)</button></div>
+</div></div>
+
+<!-- End -->
+<div id="m-end" class="modal"><div class="card">
+  <h2 id="end-title">MISSION COMPLETE</h2>
+  <p id="end-text"></p>
+  <div class="stat" id="end-stats"></div>
+  <div class="btns"><button onclick="location.reload()" class="primary">Play again</button></div>
+</div></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ---------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------
+const API = "";                        // same origin as api.py
+const BASE_SPEED_KMH = 2.5;            // suited walking speed on flat ground
+const O2_PER_MIN = 100 / (9 * 60);     // 9 h of O2 on flat ground
+const PWR_PER_MIN = 100 / (10 * 60);   // 10 h of power on flat ground
+const FACTS = [
+  "Gale Crater is about 154 km wide. Curiosity has explored it since 2012.",
+  "Mount Sharp (Aeolis Mons) rises about 5 km above the crater floor; its layers record Mars' changing climate.",
+  "Mars gravity is 38% of Earth's, but a suit and tools still make steep slopes tiring and risky.",
+];
+
+// ---------------------------------------------------------------
+// Map: NASA Mars Trek tiles (equirectangular -> Leaflet EPSG:4326)
+// ---------------------------------------------------------------
+const map = L.map("map", {crs: L.CRS.EPSG4326, zoomControl: false, attributionControl: true, minZoom: 3, maxZoom: 17});
+L.control.zoom({position: "bottomright"}).addTo(map);
+const trek = "https://trek.nasa.gov/tiles/Mars/EQ/";
+L.tileLayer(trek + "Mars_Viking_MDIM21_ClrMosaic_global_232m/1.0.0/default/default028mm/{z}/{y}/{x}.jpg",
+  {maxNativeZoom: 7, maxZoom: 17, attribution: "NASA/JPL Mars Trek"}).addTo(map);
+L.tileLayer(trek + "Gale_CTX_BlockAdj_dd/1.0.0/default/default028mm/{z}/{y}/{x}.png",
+  {maxNativeZoom: 12, maxZoom: 17, attribution: "CTX: NASA/JPL/MSSS"}).addTo(map);
+
+// ---------------------------------------------------------------
+// State
+// ---------------------------------------------------------------
+const S = {
+  info: null, route: null, pts: [], pos: 0, playing: false, speed: 3, follow: true,
+  o2: 100, pwr: 100, min: 0, walked: 0, sci: 0, saf: 1000, rr: 0,
+  targets: [], tIdx: 0, phase: "out", eventDone: false, alertsSeen: new Set(),
+  reportMode: false, legEnds: [], ended: false,
+};
+let routeLine, oldLines = [], astro, overlay = null, hazardLayer = L.layerGroup().addTo(map);
+const $ = id => document.getElementById(id);
+
+// ---------------------------------------------------------------
+// API helpers
+// ---------------------------------------------------------------
+async function api(path, body) {
+  const r = await fetch(API + path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {});
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+// ---------------------------------------------------------------
+// Geometry
+// ---------------------------------------------------------------
+const R = 3389500;
+function distM(a, b) {
+  const t = Math.PI / 180, dl = (b.lat - a.lat) * t, dn = (b.lon - a.lon) * t;
+  const h = Math.sin(dl / 2) ** 2 + Math.cos(a.lat * t) * Math.cos(b.lat * t) * Math.sin(dn / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function bearing(a, b) {
+  const t = Math.PI / 180, y = Math.sin((b.lon - a.lon) * t) * Math.cos(b.lat * t);
+  const x = Math.cos(a.lat * t) * Math.sin(b.lat * t) - Math.sin(a.lat * t) * Math.cos(b.lat * t) * Math.cos((b.lon - a.lon) * t);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+function at(d) {                       // interpolate along the route
+  const p = S.pts;
+  if (d <= 0) return {...p[0]};
+  for (let i = 1; i < p.length; i++) {
+    if (p[i].cd >= d) {
+      const f = (d - p[i - 1].cd) / Math.max(p[i].cd - p[i - 1].cd, 1e-6), a = p[i - 1], b = p[i];
+      return {lon: a.lon + f * (b.lon - a.lon), lat: a.lat + f * (b.lat - a.lat),
+              elevation_m: a.elevation_m + f * (b.elevation_m - a.elevation_m),
+              slope_deg: f < .5 ? a.slope_deg : b.slope_deg, roughness_m: f < .5 ? a.roughness_m : b.roughness_m,
+              grade: (b.elevation_m - a.elevation_m) / Math.max(b.cd - a.cd, 1), i};
+    }
+  }
+  return {...p[p.length - 1], i: p.length - 1};
+}
+
+// ---------------------------------------------------------------
+// Route handling
+// ---------------------------------------------------------------
+function remainingTargets() {
+  if (S.phase === "back") return [[S.info.habitat.lon, S.info.habitat.lat]];
+  return S.targets.slice(S.tIdx).map(t => [t.lon, t.lat]);
+}
+function loadRoute(route, keepOld) {
+  if (!route.ok) { banner(route.reason || "No safe route found", "danger"); return false; }
+  if (routeLine) {
+    if (keepOld) { routeLine.setStyle({color: "#ffffff", opacity: .45, dashArray: "6 8", weight: 3}); oldLines.push(routeLine); }
+    else map.removeLayer(routeLine);
+  }
+  S.route = route;
+  let cd = 0;
+  S.pts = route.points.map((p, i, a) => { if (i) cd += distM(a[i - 1], p); return {...p, cd}; });
+  S.pos = 0;
+  routeLine = L.polyline(S.pts.map(p => [p.lat, p.lon]), {color: "#4ade80", weight: 5, opacity: .95}).addTo(map);
+  // where does each remaining target sit on this route?
+  const goals = remainingTargets().map(([lon, lat]) => ({lon, lat}));
+  S.legEnds = []; let from = 0;
+  goals.forEach(g => {
+    let best = from, bd = Infinity;
+    for (let i = from; i < S.pts.length; i++) { const d = distM(S.pts[i], g); if (d < bd) { bd = d; best = i; } }
+    S.legEnds.push(S.pts[best].cd); from = best;
+  });
+  // route hazards (alerts from the engine)
+  S.pts.forEach(p => p.alerts && p.alerts.length && L.circleMarker([p.lat, p.lon], {radius: 4, color: "#ffb020", weight: 2, fillOpacity: .6})
+    .bindTooltip(p.alerts.map(a => a.msg).join("<br>")).addTo(hazardLayer));
+  return true;
+}
+
+async function reroute(obstacleLonLat, radius, note) {
+  const cur = at(S.pos);
+  const wasPlaying = S.playing; S.playing = false;
+  banner("Re-planning safe route on site…", "warn");
+  try {
+    const r = await api("/reroute", {current: [cur.lon, cur.lat], targets: remainingTargets(),
+      obstacle: {lon: obstacleLonLat.lon, lat: obstacleLonLat.lat, radius_m: radius, kind: "hazard", note}});
+    L.circle([obstacleLonLat.lat, obstacleLonLat.lon], {radius, color: "#ff4d4d", weight: 2, fillOpacity: .18})
+      .bindTooltip("Reported hazard (saved to map)").addTo(hazardLayer);
+    if (loadRoute(r, true)) {
+      S.rr++; S.saf += 200;
+      banner(`New safe route: ${(r.summary.length_m / 1000).toFixed(2)} km, max slope ${r.summary.max_slope_deg}° (+200 safety)`, "ok");
+    }
+  } catch (e) { banner("Re-route failed: " + e.message, "danger"); }
+  S.playing = wasPlaying; updatePlay(); hud();
+}
+
+// ---------------------------------------------------------------
+// Game loop
+// ---------------------------------------------------------------
+let last = performance.now();
+function tick(now) {
+  const dt = Math.min((now - last) / 1000, .2); last = now;
+  if (S.playing && S.pts.length && !S.ended) step(dt);
+  requestAnimationFrame(tick);
+}
+function step(dt) {
+  const here = at(S.pos);
+  const grade = here.grade || 0;
+  const v = BASE_SPEED_KMH * Math.exp(-3.5 * Math.abs(grade + .05)) / Math.exp(-3.5 * .05);   // km/h (Tobler-style)
+  const gameMin = dt * S.speed;                           // 1 real second = 1 EVA minute at x1
+  const d = v * 1000 / 60 * gameMin;
+  const legEnd = S.legEnds[0] ?? S.pts[S.pts.length - 1].cd;
+  const nd = Math.min(S.pos + d, legEnd);
+  S.walked += nd - S.pos; S.pos = nd; S.min += gameMin;
+  const effort = 1 + (here.slope_deg || 0) / 20;
+  S.o2 = Math.max(0, S.o2 - O2_PER_MIN * gameMin * effort);
+  S.pwr = Math.max(0, S.pwr - PWR_PER_MIN * gameMin * (1 + (here.slope_deg || 0) / 25));
+  for (const lvl of [30, 15]) if (S.o2 < lvl && !S["o2warn" + lvl]) { S["o2warn" + lvl] = true; banner(`O₂ at ${lvl}% — head to the habitat`, "danger"); }
+
+  // engine alerts we walk past
+  const p = S.pts[here.i] || here;
+  if (p.alerts && p.alerts.length && !S.alertsSeen.has(p.lon + "," + p.lat)) {
+    S.alertsSeen.add(p.lon + "," + p.lat); S.saf -= 10; banner("⚠ " + p.alerts.map(a => a.msg).join(" · "), "warn");
+  }
+  // hidden hazard event (once), on the first leg
+  if (!S.eventDone && S.phase === "out" && S.tIdx === 0 && S.pos > .45 * legEnd) triggerEvent();
+  if (S.o2 <= 0 || S.pwr <= 0) return endGame(false);
+  if (S.pos >= legEnd - .5) arrive();
+  hud();
+}
+
+function triggerEvent() {
+  S.eventDone = true; S.playing = false; updatePlay();
+  const ahead = at(Math.min(S.pos + 220, (S.legEnds[0] || 0) - 60));
+  S.pendingHazard = {lon: ahead.lon, lat: ahead.lat};
+  L.circleMarker([ahead.lat, ahead.lon], {radius: 9, color: "#ff4d4d", weight: 3}).addTo(hazardLayer);
+  map.panTo([ahead.lat, ahead.lon]);
+  $("m-event").classList.add("show");
+}
+$("ev-reroute").onclick = async () => {
+  $("m-event").classList.remove("show");
+  await reroute(S.pendingHazard, 150, "Boulder field detected by helmet LIDAR");
+  S.playing = true; updatePlay();
+};
+$("ev-push").onclick = () => {
+  $("m-event").classList.remove("show");
+  S.saf -= 300; S.o2 = Math.max(0, S.o2 - 8);
+  banner("You crossed unstable boulders: -300 safety, extra O₂ used. Next time, report it!", "danger");
+  S.playing = true; updatePlay();
+};
+
+function arrive() {
+  S.playing = false; updatePlay();
+  S.legEnds.shift();
+  if (S.phase === "back") return endGame(true);
+  const t = S.targets[S.tIdx], here = at(S.pos);
+  $("tg-title").textContent = t.name.toUpperCase();
+  $("tg-task").innerHTML = `<b>Task:</b> ${t.task}`;
+  $("tg-stats").innerHTML = `
+    <div><span class="lbl">ELEVATION</span><b>${here.elevation_m.toFixed(0)} m</b></div>
+    <div><span class="lbl">LOCAL SLOPE</span><b>${(here.slope_deg || 0).toFixed(1)}°</b></div>
+    <div><span class="lbl">ROUGHNESS</span><b>${(here.roughness_m || 0).toFixed(2)} m</b></div>
+    <div><span class="lbl">O₂ LEFT</span><b>${S.o2.toFixed(0)}%</b></div>`;
+  $("tg-fact").textContent = FACTS[S.tIdx % FACTS.length] + " Terrain values: MRO CTX DTM.";
+  $("m-target").classList.add("show");
+}
+$("tg-collect").onclick = async () => {
+  $("m-target").classList.remove("show");
+  S.sci += 500; S.targets[S.tIdx].marker.getElement()?.querySelector(".tgt")?.classList.add("done");
+  S.tIdx++;
+  if (S.tIdx >= S.targets.length) {
+    S.phase = "back";
+    banner("All tasks complete. Planning the safest way back to the habitat…", "ok");
+    const cur = at(S.pos);
+    try { loadRoute(await api("/route", {start: [cur.lon, cur.lat], targets: remainingTargets()}), true); }
+    catch (e) { return banner("Return route failed: " + e.message, "danger"); }
+  }
+  S.playing = true; updatePlay(); hud();
+};
+
+async function endGame(ok) {
+  S.ended = true; S.playing = false; updatePlay();
+  let reported = 0;
+  try { reported = (await api("/obstacles")).features.length; } catch (e) {}
+  const total = S.sci + Math.max(S.saf, 0);
+  $("end-title").textContent = ok ? "MISSION COMPLETE" : "MISSION ABORTED";
+  $("end-title").style.color = ok ? "var(--hud)" : "var(--danger)";
+  $("end-text").innerHTML = ok
+    ? `You are back at the habitat. <b>${reported}</b> reported hazard(s) were saved as a new map layer, so the next crew walks a safer route.`
+    : "Your suit ran out of resources. Steep ground and detours cost O₂ and power — plan for them.";
+  $("end-stats").innerHTML = `
+    <div><span class="lbl">TOTAL SCORE</span><b>${total}</b></div>
+    <div><span class="lbl">DISTANCE</span><b>${(S.walked / 1000).toFixed(2)} km</b></div>
+    <div><span class="lbl">EVA TIME</span><b>${fmt(S.min)}</b></div>
+    <div><span class="lbl">O₂ / POWER LEFT</span><b>${S.o2.toFixed(0)}% / ${S.pwr.toFixed(0)}%</b></div>
+    <div><span class="lbl">SAMPLES</span><b>${S.sci / 500} / ${S.targets.length}</b></div>
+    <div><span class="lbl">RE-ROUTES</span><b>${S.rr}</b></div>`;
+  $("m-end").classList.add("show");
+}
+
+// ---------------------------------------------------------------
+// HUD
+// ---------------------------------------------------------------
+const fmt = m => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(Math.floor(m % 60)).padStart(2, "0")}`;
+let bannerTimer;
+function banner(msg, kind) {
+  const b = $("banner"); b.className = kind; b.innerHTML = msg;
+  clearTimeout(bannerTimer); bannerTimer = setTimeout(() => b.className = "", 5000);
+}
+function hud() {
+  if (!S.pts.length) return;
+  const here = at(S.pos);
+  astro.setLatLng([here.lat, here.lon]);
+  if (S.follow) map.panTo([here.lat, here.lon], {animate: false});
+  $("o2t").textContent = S.o2.toFixed(0) + "%"; $("o2b").style.width = S.o2 + "%";
+  $("o2b").style.background = S.o2 < 25 ? "var(--danger)" : S.o2 < 50 ? "var(--warn)" : "var(--hud)";
+  $("pwt").textContent = S.pwr.toFixed(0) + "%"; $("pwb").style.width = S.pwr + "%";
+  $("time").textContent = fmt(S.min); $("walked").textContent = (S.walked / 1000).toFixed(2) + " km";
+  $("sci").textContent = S.sci; $("saf").textContent = S.saf; $("rr").textContent = S.rr;
+  const goal = S.phase === "back" ? {name: "Habitat", ...S.info.habitat} : S.targets[S.tIdx];
+  if (goal) {
+    $("next").textContent = goal.name;
+    const remain = Math.max(0, (S.legEnds[0] ?? S.pts[S.pts.length - 1].cd) - S.pos);
+    $("dist").textContent = remain > 999 ? (remain / 1000).toFixed(2) + " km" : remain.toFixed(0) + " m";
+    $("arrow").style.transform = `rotate(${bearing(here, goal)}deg)`;
+  }
+  const s = here.slope_deg || 0, w = S.info.warn_slope_deg, mx = S.info.max_slope_deg;
+  $("elev").textContent = here.elevation_m.toFixed(0) + " m";
+  $("slope").textContent = s.toFixed(1) + "°";
+  $("slb").style.width = Math.min(100, s / mx * 100) + "%";
+  $("slb").style.background = s >= w ? "var(--danger)" : s >= w * .6 ? "var(--warn)" : "var(--ok)";
+  $("terr").textContent = s >= w ? "STEEP" : (here.roughness_m || 0) >= 1 ? "ROUGH" : "STABLE";
+  $("terr").style.color = s >= w ? "var(--danger)" : (here.roughness_m || 0) >= 1 ? "var(--warn)" : "var(--ok)";
+}
+
+// ---------------------------------------------------------------
+// Controls
+// ---------------------------------------------------------------
+function updatePlay() { $("play").textContent = S.playing ? "⏸ Pause" : "▶ Walk"; }
+$("play").onclick = () => { if (!S.ended) { S.playing = !S.playing; updatePlay(); } };
+document.querySelectorAll("[data-speed]").forEach(b => b.onclick = () => {
+  S.speed = +b.dataset.speed;
+  document.querySelectorAll("[data-speed]").forEach(x => x.classList.toggle("active", x === b));
+});
+$("center").onclick = () => { S.follow = !S.follow; $("center").classList.toggle("active", S.follow); hud(); };
+$("center").classList.add("active");
+$("report").onclick = () => {
+  S.reportMode = !S.reportMode; $("report").classList.toggle("active", S.reportMode);
+  map.getContainer().style.cursor = S.reportMode ? "crosshair" : "";
+  if (S.reportMode) banner("Tap the map where you see the hazard", "warn");
+};
+map.on("click", e => {
+  if (!S.reportMode || S.ended) return;
+  S.reportMode = false; $("report").classList.remove("active"); map.getContainer().style.cursor = "";
+  reroute({lon: e.latlng.lng, lat: e.latlng.lat}, 100, "Reported by astronaut");
+});
+map.on("dragstart", () => { S.follow = false; $("center").classList.remove("active"); });
+document.querySelectorAll("input[name=ov]").forEach(r => r.onchange = () => {
+  if (overlay) { map.removeLayer(overlay); overlay = null; }
+  if (r.value !== "none") overlay = L.imageOverlay(`${API}/layer/${r.value}.png`, S.info.bounds, {opacity: +$("opac").value}).addTo(map);
+});
+$("opac").oninput = () => overlay && overlay.setOpacity(+$("opac").value);
+
+// ---------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------
+(async function boot() {
+  try {
+    S.info = await api("/info");
+    const h = S.info.habitat;
+    map.fitBounds(S.info.bounds);
+    L.marker([h.lat, h.lon], {icon: L.divIcon({className: "", html: '<div class="hab">🏠</div>', iconSize: [28, 28]})})
+      .bindTooltip("Habitat").addTo(map);
+    S.targets = S.info.targets.map((t, i) => ({...t,
+      marker: L.marker([t.lat, t.lon], {icon: L.divIcon({className: "", html: `<div class="tgt">${i + 1}</div>`, iconSize: [28, 28]})})
+        .bindTooltip(`${t.name}: ${t.task}`).addTo(map)}));
+    const route = await api("/route", {start: [h.lon, h.lat], targets: S.targets.map(t => [t.lon, t.lat])});
+    if (!loadRoute(route, false)) throw new Error(route.reason);
+    astro = L.marker([h.lat, h.lon], {icon: L.divIcon({className: "", html: '<div class="astro">🧑‍🚀</div>', iconSize: [30, 30]}), zIndexOffset: 1000}).addTo(map);
+    map.fitBounds(routeLine.getBounds(), {padding: [60, 60]});
+    const s = route.summary;
+    $("apistatus").innerHTML = `Route engine ready ✓ — planned walk <b>${(s.length_m / 1000).toFixed(2)} km</b>,
+      climb <b>${s.ascent_m} m</b>, max slope <b>${s.max_slope_deg}°</b>, ~<b>${fmt(s.est_duration_min)}</b> EVA.`;
+    $("go").disabled = false;
+    try {   // real Curiosity traverse (optional file from run_curiosity.py)
+      const cg = await (await fetch("curiosity.geojson")).json();
+      const cur = L.geoJSON(cg, {
+        filter: f => f.geometry.type === "LineString" || true,
+        style: {color: "#f472b6", weight: 3, dashArray: "4 6"},
+        pointToLayer: (f, ll) => L.circleMarker(ll, {radius: 4, color: "#f472b6", weight: 1, fillOpacity: .8}),
+        onEachFeature: (f, l) => f.properties.Sol != null && l.bindTooltip(
+          `Curiosity sol ${f.properties.Sol}<br>Slope ${f.properties.DEM_Slope_deg}° · Risk ${f.properties.Risk_Level}`)
+      }).addTo(map);
+      $("curRow").style.display = "flex";
+      $("curTg").onchange = e => e.target.checked ? cur.addTo(map) : map.removeLayer(cur);
+    } catch (e) {}
+    hud();
+  } catch (e) {
+    $("apistatus").innerHTML = `<span style="color:var(--danger)">Route engine not reachable (${e.message}).
+      Start it with: <code>uvicorn api:app --port 8000</code> and open http://localhost:8000</span>`;
+  }
+})();
+$("go").onclick = () => { $("m-intro").classList.remove("show"); S.playing = true; updatePlay(); };
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
