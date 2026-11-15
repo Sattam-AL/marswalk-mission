@@ -4,11 +4,13 @@
 
 ▶ **Play:** https://sattam-al.github.io/marswalk-mission/
 
-An interactive Marswalk planner on real NASA terrain of Gale Crater / Mount Sharp:
+An interactive Marswalk planner on real NASA terrain of Gale Crater / Mount Sharp (English / العربية):
 - Terrain: MRO CTX stereo DTM (USGS Astrogeology / NASA), 20 m/pixel — slope (Horn 3×3) and roughness (5×5 detrended).
 - Route engine: cost grid + A* with a climb penalty and a 20 m safety buffer; slopes over 15° are no-go (illustrative thresholds, not NASA EVA limits).
 - Live re-routing: report a hazard and a new safe route is computed on site (Earth is 4–24 min away by radio).
 - Learning map: every reported hazard is saved as a no-go layer for later routes.
+- Planner mode: tap the map to choose your own science stops; live elevation profile and mission log.
+- Base map: NASA/JPL Mars Trek CTX imagery with DTM shaded relief, slope, roughness and walk-cost overlays.
 
 ## Repository
 - `index.html` — browser version (engine runs in the page).
