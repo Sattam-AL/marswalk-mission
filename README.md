@@ -13,8 +13,19 @@ An interactive Marswalk planner on real NASA terrain of Gale Crater / Mount Shar
 - Base map: NASA/JPL Mars Trek CTX imagery with DTM shaded relief, slope, roughness and walk-cost overlays.
 
 ## Repository
-- `index.html` — browser version (engine runs in the page).
-- `engine/` — Python engine (`marswalk_router.py`), Curiosity traverse builder (`curiosity_traverse.py`), FastAPI server (`api.py`) and web game (`web/`). Run `engine/start_game.bat` on Windows or `uvicorn api:app` from `engine/`.
+| Folder | Contents |
+|---|---|
+| `index.html` | Browser version of the game (route engine runs in the page) — published at the Play link |
+| `engine/` | Python route engine (`marswalk_router.py`), Curiosity traverse builder, FastAPI server (`api.py`), Windows launcher (`start_game.bat`), API web UI (`web/`) |
+| `engine/colab/` | Ready Colab cells: route demo, Curiosity traverse, helper cells (DEM URL, Drive save, zip, layer previews) |
+| `notebooks/` | `ASTRO_HEROES_Marswalk_DEM_Ready.ipynb` — full analysis notebook (runs top to bottom, includes the engine) |
+| `data/route_outputs/` | Planned route, re-routed route and reported obstacle, computed on the NASA CTX DTM |
+| `data/terrain_layers/` | Elevation, slope, roughness and walk-cost maps + 20 m terrain grids (`.npz`: slope, elev, rough) |
+| `docs/` | NASA data sources, CSV data review, project details, AI disclosure, team guide (Arabic) |
+| `images/` | Colab result on the real DTM and game screenshots; `illustrations_ai/` = AI-assisted concept drawings (internal) |
+| `video/` | Explainer motion-graphics video (AI-assisted, internal) |
+
+Run the Python version: `engine/start_game.bat` on Windows, or `uvicorn api:app` from `engine/`.
 
 ## AI disclosure
 AI tools (Claude by Anthropic) assisted in writing the code. All terrain data comes from NASA/USGS sources; maps and routes are computed by our code from that data.

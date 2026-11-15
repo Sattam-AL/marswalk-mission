@@ -1,0 +1,20 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          137.497454,
+          -4.622546
+        ]
+      },
+      "properties": {
+        "radius_m": 300,
+        "kind": "boulder field",
+        "note": "Reported by astronaut"
+      }
+    }
+  ]
+}
